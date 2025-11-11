@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Aplikasi Keuangan Pribadi — Single File</title>
+  <!-- Tailwind CDN (for quick single-file) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js for charting -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    /* Custom modern/elegant styles + 'chaya' like soft shadow & glassmorphism */
+    :root{
+      --bg:#0f1724; /* deep navy */
+      --card:#0b1220;
+      --glass: rgba(255,255,255,0.04);
+      --accent: linear-gradient(90deg,#7c3aed,#06b6d4);
+    }
+    html,body{height:100%;}
+    body{
+      margin:0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+      background: radial-gradient(1200px 600px at 10% 10%, rgba(124,58,237,0.08), transparent),
+                  radial-gradient(900px 400px at 90% 90%, rgba(6,182,212,0.06), transparent),
+                  var(--bg);
+      color:#e6eef8;
+      -webkit-font-smoothing:antialiased;
+      -moz-osx-font-smoothing:grayscale;
+    }
+    /* Elegant "chaya" shadow effect */
+    .chaya {
+      background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+      border: 1px solid rgba(255,255,255,0.04);
+      box-shadow: 0 8px 30px rgba(2,6,23,0.7), inset 0 1px 0 rgba(255,255,255,0.02);
+      backdrop-filter: blur(6px) saturate(120%);
+      border-radius: 16px;
+    }
+    .accent-line{
+      height:4px;
+      border-radius:999px;
+      background:var(--accent);
+      box-shadow:0 6px 20px rgba(99,102,241,0.18);
+    }
+    /* soft buttons */
+    .btn-soft{
+      background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+      border: 1px solid rgba(255,255,255,0.06);
+      padding:8px 12px;
+      border-radius:10px;
+      font-weight:600;
+      transition:transform .12s ease, box-shadow .12s ease;
+    }
+    .btn-soft:active{transform:translateY(1px)}
+    .muted{color:rgba(230,238,248,0.66)}
+    /* tiny utility for currency */
+    .currency{font-variant-numeric: tabular-nums;}
+    /* responsive table */
+    table{width:100%;border-collapse:collapse}
+    th,td{padding:10px 12px;text-align:left}
+    thead th{font-size:12px;color:rgba(230,238,248,0.7);text-transform:uppercase;letter-spacing:0.06em}
+    tbody tr{border-bottom:1px solid rgba(255,255,255,0.03)}
+    .badge{padding:6px 8px;border-radius:999px;font-weight:700;font-size:12px}
+    /* subtle animations */
+    .fade-up{animation:fadeUp .45s ease both}
+    @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  </style>
+</head>
+<body class="p-6 md:p-12">
+  <div class="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6">
+    <!-- Left: Summary + Actions -->
+    <aside class="chaya p-6 md:col-span-1 fade-up">
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <h1 class="text-2xl font-extrabold">Keuangan Saya</h1>
+          <p class="muted mt-1">Aplikasi keuangan pribadi — penyimpanan lokal & API-ready</p>
+        </div>
+        <div class="w-12 h-12 flex items-center justify-center rounded-lg" title="logo">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="3" y="3" width="18" height="18" rx="6" fill="url(#g)" />
+            <defs>
+              <linearGradient id="g" x1="0" x2="1">
+                <stop offset="0" stop-color="#7c3aed" />
+                <stop offset="1" stop-color="#06b6d4" />
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+      </div>
+
+      <div class="mt-5">
+        <div class="accent-line mb-4"></div>
+
+        <div class="grid grid-cols-2 gap-4">
+          <div class="p-4 rounded-lg bg-gradient-to-b from-white/2 to-transparent">
+            <div class="muted text-sm">Saldo</div>
+            <div id="saldoTotal" class="text-xl font-bold currency">Rp0</div>
+          </div>
+          <div class="p-4 rounded-lg bg-gradient-to-b from-white/2 to-transparent">
+            <div class="muted text-sm">Pengeluaran (bulan ini)</div>
+            <div id="pengeluaranBulan" class="text-xl font-bold currency text-red-400">Rp0</div>
+          </div>
+        </div>
+
+        <div class="mt-4 space-y-2">
+          <button id="btnAdd" class="btn-soft w-full text-left">➕ Tambah Transaksi</button>
+          <button id="btnExport" class="btn-soft w-full text-left">⬇️ Ekspor CSV</button>
+        </div>
+
+        <p class="muted mt-4 text-xs">Catatan: data disimpan di <strong>LocalStorage</strong>. Untuk menyimpan ke MySQL, hubungkan backend dan aktifkan opsi sinkronisasi di pengaturan.</p>
+      </div>
+    </aside>
+
+    <!-- Middle: Form + Chart -->
+    <main class="chaya p-6 md:col-span-2 fade-up">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <section>
+          <h2 class="text-lg font-bold">Tambah / Edit Transaksi</h2>
+          <form id="txForm" class="mt-3 space-y-3">
+            <input type="hidden" id="txId">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <input id="txTitle" type="text" placeholder="Deskripsi (mis. Gaji, Makan siang)" required class="w-full p-3 rounded-lg bg-transparent border border-white/6">
+              <select id="txType" class="w-full p-3 rounded-lg bg-transparent border border-white/6">
+                <option value="income">Pemasukan</option>
+                <option value="expense">Pengeluaran</option>
+              </select>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <input id="txAmount" type="number" placeholder="Jumlah (Rupiah)" required class="w-full p-3 rounded-lg bg-transparent border border-white/6">
+              <input id="txDate" type="date" class="w-full p-3 rounded-lg bg-transparent border border-white/6">
+            </div>
+            <div class="flex gap-2">
+              <input id="txCategory" type="text" placeholder="Kategori (mis. Makanan)" class="w-full p-3 rounded-lg bg-transparent border border-white/6">
+              <button type="submit" class="btn-soft">Simpan</button>
+            </div>
+          </form>
+
+          <div class="mt-6">
+            <h3 class="font-semibold">Ringkasan Bulanan</h3>
+            <canvas id="chart" height="120"></canvas>
+          </div>
+        </section>
+
+        <section>
+          <h2 class="text-lg font-bold">Daftar Transaksi</h2>
+          <div class="mt-3 overflow-x-auto">
+            <table id="txTable" class="min-w-[640px]">
+              <thead>
+                <tr><th>Deskripsi</th><th>Kategori</th><th>Tanggal</th><th>Jumlah</th><th></th></tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+
+      <div class="mt-6 text-sm muted">API-ready: terdapat fungsi <code>syncToServer()</code> di JS yang mengirim transaksi ke <code>/api/transactions</code>. (Butuh backend untuk koneksi MySQL).</div>
+    </main>
+  </div>
+
+  <script>
+    // --- Simple local data model + API hooks ---
+    const KEY = 'keuangan_v1';
+    let transactions = [];
+
+    // Helpers
+    const rupiah = n => {
+      const v = Number(n) || 0;
+      return v.toLocaleString('id-ID', {style:'currency',currency:'IDR',maximumFractionDigits:0});
+    }
+
+    function saveLocal(){
+      localStorage.setItem(KEY, JSON.stringify(transactions));
+    }
+    function loadLocal(){
+      try{ transactions = JSON.parse(localStorage.getItem(KEY)) || []; }catch(e){ transactions = []; }
+    }
+
+    // API hook: replace with your backend endpoint to persist to MySQL
+    async function syncToServer(){
+      try{
+        // Example: POST to server. Implement server-side to accept this.
+        await fetch('/api/transactions/sync', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({transactions})
+        });
+        console.info('Sync complete');
+      }catch(e){ console.warn('Sync failed (no backend configured)'); }
+    }
+
+    // UI
+    const txForm = document.getElementById('txForm');
+    const txTableBody = document.querySelector('#txTable tbody');
+    const saldoEl = document.getElementById('saldoTotal');
+    const pengeluaranEl = document.getElementById('pengeluaranBulan');
+    const chartCtx = document.getElementById('chart').getContext('2d');
+    let chart;
+
+    function render(){
+      txTableBody.innerHTML = '';
+      let income=0, expense=0;
+      transactions.sort((a,b)=> new Date(b.date) - new Date(a.date));
+      transactions.forEach(tx=>{
+        const tr = document.createElement('tr');
+        const amount = Number(tx.amount);
+        const amountCell = amount>=0? rupiah(amount) : rupiah(Math.abs(amount));
+        const sign = tx.type==='expense' ? -1 : 1;
+        if(tx.type==='income') income += amount; else expense += amount;
+
+        tr.innerHTML = `
+          <td><div class="font-semibold">${escapeHtml(tx.title||'—')}</div><div class="muted text-xs">${tx.type}</div></td>
+          <td>${escapeHtml(tx.category||'-')}</td>
+          <td class="muted text-xs">${formatDate(tx.date)}</td>
+          <td class="currency">${tx.type==='expense'?'<span class="text-red-300">-</span>':''}${amountCell}</td>
+          <td class="text-right">
+            <button class="btn-soft btn-edit" data-id="${tx.id}">✏️</button>
+            <button class="btn-soft btn-del" data-id="${tx.id}">🗑️</button>
+          </td>
+        `;
+        txTableBody.appendChild(tr);
+      });
+
+      saldoEl.textContent = rupiah(income - expense);
+      pengeluaranEl.textContent = rupiah(expense);
+
+      // chart: group by month (last 6 months)
+      updateChart();
+    }
+
+    function formatDate(d){
+      if(!d) return '-';
+      const dt = new Date(d);
+      if(Number.isNaN(dt)) return d;
+      return dt.toLocaleDateString('id-ID');
+    }
+
+    function escapeHtml(s){
+      return String(s||'').replace(/[&<>"']/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]});
+    }
+
+    txForm.addEventListener('submit', e=>{
+      e.preventDefault();
+      const id = document.getElementById('txId').value || Date.now().toString();
+      const title = document.getElementById('txTitle').value.trim();
+      const type = document.getElementById('txType').value;
+      const amount = Math.abs(Number(document.getElementById('txAmount').value) || 0);
+      const date = document.getElementById('txDate').value || new Date().toISOString();
+      const category = document.getElementById('txCategory').value.trim();
+
+      const existing = transactions.find(t=>t.id===id);
+      const payload = {id,title,type,amount,date,category};
+      if(existing){
+        Object.assign(existing,payload);
+      }else{
+        transactions.push(payload);
+      }
+      saveLocal();
+      render();
+      txForm.reset();
+      document.getElementById('txId').value='';
+
+      // try sync (non-blocking)
+      syncToServer();
+    });
+
+    // delegated edit/delete
+    txTableBody.addEventListener('click', e=>{
+      const btn = e.target.closest('button');
+      if(!btn) return;
+      const id = btn.dataset.id;
+      if(btn.classList.contains('btn-edit')){
+        const tx = transactions.find(t=>t.id===id); if(!tx) return;
+        document.getElementById('txId').value = tx.id;
+        document.getElementById('txTitle').value = tx.title;
+        document.getElementById('txType').value = tx.type;
+        document.getElementById('txAmount').value = tx.amount;
+        document.getElementById('txDate').value = tx.date.split('T')[0];
+        document.getElementById('txCategory').value = tx.category;
+        window.scrollTo({top:0,behavior:'smooth'});
+      }
+      if(btn.classList.contains('btn-del')){
+        if(confirm('Hapus transaksi ini?')){
+          transactions = transactions.filter(t=>t.id!==id);
+          saveLocal();
+          render();
+          syncToServer();
+        }
+      }
+    });
+
+    document.getElementById('btnAdd').addEventListener('click', ()=>{
+      window.scrollTo({top:0,behavior:'smooth'});
+      document.getElementById('txTitle').focus();
+    });
+
+    document.getElementById('btnExport').addEventListener('click', ()=>{
+      const csv = toCSV(transactions);
+      const blob = new Blob([csv],{type:'text/csv'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = 'transaksi.csv'; a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    function toCSV(rows){
+      const header = ['id','title','type','amount','date','category'];
+      const lines = [header.join(',')];
+      rows.forEach(r=>{
+        lines.push([r.id,`"${(r.title||'').replace(/"/g,'""')}\`",r.type,r.amount,r.date,r.category||''].join(','));
+      });
+      return lines.join('\n');
+    }
+
+    function updateChart(){
+      // last 6 months labels
+      const now = new Date();
+      const months = [];
+      for(let i=5;i>=0;i--){ const d = new Date(now.getFullYear(), now.getMonth()-i, 1); months.push({label: d.toLocaleString('id-ID',{month:'short',year:'numeric'}), key: d.getFullYear()+'-'+(d.getMonth()+1)}); }
+
+      const incomeData = months.map(m=>0);
+      const expenseData = months.map(m=>0);
+
+      transactions.forEach(tx=>{
+        const d = new Date(tx.date);
+        const key = d.getFullYear()+'-'+(d.getMonth()+1);
+        const idx = months.findIndex(x=>x.key===key);
+        if(idx>=0){ if(tx.type==='income') incomeData[idx]+=Number(tx.amount); else expenseData[idx]+=Number(tx.amount); }
+      });
+
+      const labels = months.map(m=>m.label);
+
+      if(chart) chart.destroy();
+      chart = new Chart(chartCtx,{
+        type:'bar',
+        data:{labels, datasets:[{label:'Pemasukan', data:incomeData, stack:'a'},{label:'Pengeluaran', data:expenseData, stack:'a'}]},
+        options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{labels:{color:'#cfe6ff'}}}, scales:{x:{grid:{display:false}, ticks:{color:'#cfe6ff'}}, y:{ticks:{color:'#cfe6ff'}}}
+      });
+    }
+
+    // init
+    loadLocal(); render();
+
+    // auto-sample seed if empty (nice for first-time demo)
+    if(!transactions.length){
+      transactions = [
+        {id:'t1',title:'Gaji',type:'income',amount:15000000,date:new Date().toISOString(),category:'Gaji'},
+        {id:'t2',title:'Makan Malam',type:'expense',amount:85000,date:new Date().toISOString(),category:'Makanan'},
+        {id:'t3',title:'Langganan',type:'expense',amount:120000,date:new Date().toISOString(),category:'Hiburan'}
+      ]; saveLocal(); render();
+    }
+
+    // Expose for debugging
+    window.__keuangan = {transactions, saveLocal, loadLocal, syncToServer};
+  </script>
+</body>
+</html>
